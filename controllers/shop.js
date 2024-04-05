@@ -1,5 +1,5 @@
 const Product = require('../models/product');
-const user = require('../models/user');
+const Order = require('../models/order');
 
 exports.getProducts = (req, res, next) => {
   Product.find()
@@ -80,9 +80,25 @@ exports.postCartDeleteProduct = (req, res, next) => {
 };
 
 exports.postOrder = (req, res, next) => {
-  let fetchedCart;
   req.user
-    .addOrder()
+    .populate('cart.items.productId')
+    // .execPopulate()
+    .then(user => {
+      const products = user.cart.items.map((i) => {
+        return { quantity: i.quantity, product: { ...i.productId._doc } }
+      })
+      const order = new Order({
+        products: products,
+        user: {
+          name: req.user.name,
+          userId: req.user //mongoose will automatically get the id from user
+        }
+      })
+      return order.save();
+    })
+    .then(() => {
+      return req.user.clearCart()
+    })
     .then(result => {
       res.redirect('/orders');
     })
@@ -90,8 +106,7 @@ exports.postOrder = (req, res, next) => {
 };
 
 exports.getOrders = (req, res, next) => {
-  req.user
-    .getOrders()
+  Order.find({ 'user.userId': req.user._id })
     .then(orders => {
       res.render('shop/orders', {
         path: '/orders',
@@ -100,4 +115,6 @@ exports.getOrders = (req, res, next) => {
       });
     })
     .catch(err => console.log(err));
+
+
 };
